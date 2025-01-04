@@ -5,25 +5,21 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.vpn_bot.config.BotConfig;
+import org.example.vpn_bot.panel_x_ui.SendTestConfigToClient;
 import org.example.vpn_bot.repositories.TelegramUserRepository;
+import org.example.vpn_bot.panel_x_ui.HttpsService;
 import org.example.vpn_bot.service.Impl.SignUpServiceImpl;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendSticker;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
-import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.telegram.telegrambots.bots.DefaultAbsSender;
 
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,8 +28,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TelegramBot extends TelegramLongPollingBot {
 
+    private final HttpsService httpsService;
     private final TelegramUserRepository tgUserRepo;
     private final SignUpServiceImpl signUpService;
+    private final SendTestConfigToClient sendTestConfigToClient;
 
 
     private final BotConfig config;
@@ -149,6 +147,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void getTestVPN(Update update){
+        sendTestConfigToClient.addClientToInbound(update);
         Long id = update.getCallbackQuery().getMessage().getChatId();
         int messId = update.getCallbackQuery().getMessage().getMessageId();
         String text = "✅ Доступ открыт ✅";
@@ -158,7 +157,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         message.setMessageId(messId);
         SendMessage messageVpn = new SendMessage();
         messageVpn.setChatId(id);
-        messageVpn.setText("Вот твой конфиг");
+        messageVpn.setText("Вот твой конфиг \n\n\n" +
+                "Приложение можешь скачать отсюда: " + "https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box");
         try {
             execute(message);
         } catch (TelegramApiException e) {
@@ -195,6 +195,17 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void search(Update update) {
+        SendMessage message = new SendMessage();
+        message.setChatId(update.getMessage().getChatId());
+        message.setParseMode("HTML");
+
+        String ans = httpsService.SendPostAuthorization();
+        message.setText("<b>Ответ авторизации</b> " + ans);
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            log.error("Error occurred: " + e.getMessage());
+        }
     }
 
     private void startCommandReceived(Update update) {
