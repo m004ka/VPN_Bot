@@ -12,7 +12,6 @@ import org.springframework.web.client.RestTemplate;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -41,7 +40,10 @@ public class ApiOptions {
 
         // Генерация даты в формате Unix timestamp на 14 дней позже текущего времени
         long expiryTimestampMillis = Instant.now().plus(14, ChronoUnit.DAYS).atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
-
+        if(telegramUser.getUsername() == null){
+            telegramUser.setUsername("id" + telegramUser.getChatId());
+            telegramUserRepository.save(telegramUser);
+        }
         // Используем LinkedHashMap для соблюдения порядка ключей
         Map<String, Object> clientData = new LinkedHashMap<>();
         clientData.put("id", String.valueOf(telegramUser.getChatId())); // ID в кавычках
@@ -102,7 +104,7 @@ public class ApiOptions {
         }
     }
 
-    public Long getTimeToLeft(Long id){
+    public Long getTimeToLeft(Long id) {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
         String sessionId = "3x-ui=MTczNTk2MTY0NXxEWDhFQVFMX2dBQUJFQUVRQUFCMV80QUFBUVp6ZEhKcGJtY01EQUFLVEU5SFNVNWZWVk5GVWhoNExYVnBMMlJoZEdGaVlYTmxMMjF2WkdWc0xsVnpaWExfZ1FNQkFRUlZjMlZ5QWYtQ0FBRUVBUUpKWkFFRUFBRUlWWE5sY201aGJXVUJEQUFCQ0ZCaGMzTjNiM0prQVF3QUFRdE1iMmRwYmxObFkzSmxkQUVNQUFBQUh2LUNHd0VDQVFwRFIwdFVWbTFrVTNOdUFRbzRaM1ZXUTJVNU9YTnFBQT09fNtxU4yDc6HsMB9s7o15nCkHM4e9qjItPCO7HWHk54jI"; // Подставьте сюда свой session ID
@@ -150,7 +152,6 @@ public class ApiOptions {
         } catch (Exception e) {
             log.error("Ошибка при выполнении GET-запроса для пользователя (chatId: " + id + "): " + e.getMessage(), e);
         }
-
 
 
         return null;
