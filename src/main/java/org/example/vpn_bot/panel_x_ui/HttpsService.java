@@ -32,9 +32,6 @@ public class HttpsService {
     public String SendPostAuthorization() {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Content-Type", "application/json");
-
-        // Формируем тело запроса (x-www-form-urlencoded)
-
         headers.set("Content-Type", "application/x-www-form-urlencoded");
 
         String body = "username=" + login + "&password=" + password;
