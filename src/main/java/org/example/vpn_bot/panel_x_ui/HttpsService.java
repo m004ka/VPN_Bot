@@ -29,7 +29,7 @@ public class HttpsService {
         this.restTemplate = new RestTemplate();
     }
 
-    public String SendPostAuthorization() {
+    public List<String> SendPostAuthorization() {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Content-Type", "application/json");
         headers.set("Content-Type", "application/x-www-form-urlencoded");
@@ -53,6 +53,6 @@ public class HttpsService {
         }
 
         // Возвращаем ответ в теле
-        return response.getBody();
+        return cookies;
     }
 }
