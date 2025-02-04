@@ -9,7 +9,8 @@ import org.example.vpn_bot.config.BotConfig;
 import org.example.vpn_bot.models.TelegramUser;
 import org.example.vpn_bot.panel_x_ui.ApiOptions;
 import org.example.vpn_bot.repositories.TelegramUserRepository;
-import org.example.vpn_bot.service.Impl.SignUpServiceImpl;
+import org.example.vpn_bot.service.keyboard.KeyBoardService;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -30,7 +31,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 @Slf4j
@@ -38,11 +38,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TelegramBot extends TelegramLongPollingBot {
 
-private final TelegramBotQRCode QR;
+    private final TelegramBotQRCode QR;
     private final TelegramUserRepository tgUserRepo;
     private final SignUpServiceImpl signUpService;
     private final ApiOptions apiOptions;
-
+    private final KeyBoardService keyBoardService;
+    //    private final TelegramBotMenu telegramBotMenu;
     @Value("${vpn.protocol}")
     private String protocol;
     @Value("${vpn.connect}")
@@ -93,6 +94,7 @@ private final TelegramBotQRCode QR;
 
     private void startCommand(Update update) {
         Long id = getId(update);
+        System.out.println(id);
         if (tgUserRepo.existsTelegramUserByChatId(id)) {
             menu(update);
 
@@ -103,39 +105,21 @@ private final TelegramBotQRCode QR;
             SendSticker sendSticker = new SendSticker();
             sendSticker.setChatId(update.getMessage().getChatId());
             sendSticker.setSticker(sticker);
-            try {
-                execute(sendSticker);
-            } catch (TelegramApiException e) {
-                e.printStackTrace();
-                log.error("Хасбик не доставлен: " + e.getMessage());
-            }
+            sendMessage(sendSticker);
 
             SendMessage message = new SendMessage();
             message.setChatId(update.getMessage().getChatId());
             message.setParseMode("HTML");
             message.setText("<b>Добро пожаловать в бот!</b> \n" + "\nЧтобы получить доступ, нажми кнопку ниже:");
+            message.setReplyMarkup(keyBoardService.getAccess());
 
-            InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-            List<InlineKeyboardButton> but = new ArrayList<>();
-            List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
-            InlineKeyboardButton button = new InlineKeyboardButton();
-            button.setText("✅ Получить доступ ✅");
-            button.setCallbackData("ACCEPT");
-            but.add(button);
-            buttons.add(but);
-            keyboardMarkup.setKeyboard(buttons);
-            message.setReplyMarkup(keyboardMarkup);
-
-            try {
-                execute(message);
-            } catch (TelegramApiException e) {
-                log.error("Сообщение не доставлено: " + e.getMessage());
-            }
+            sendMessage(message);
         }
         deleteLastBotMessage(update.getMessage().getChatId(), update.getMessage().getMessageId());
 
     }
-    private String getConfig(Update update){
+
+    private String getConfig(Update update) {
         Long id = getId(update);
         TelegramUser user = tgUserRepo.findByChatId(id).orElseThrow(() -> new IllegalArgumentException("Telegram user with chat ID " + id + " not found."));
         return protocol + user.getChatId() + connect + user.getUsername();
@@ -147,10 +131,10 @@ private final TelegramBotQRCode QR;
         TelegramUser user = tgUserRepo.findByChatId(id).orElseThrow(() -> new IllegalArgumentException("Telegram user with chat ID " + id + " not found."));
         int messId = update.getCallbackQuery().getMessage().getMessageId();
         String text = "✅ Доступ открыт ✅";
-        EditMessageText message = new EditMessageText();
+        deleteLastBotMessage(id, messId);
+        SendPhoto message = sendQRCode(id, getConfig(update));
         message.setChatId(id);
-        message.setText(text);
-        message.setMessageId(messId);
+        message.setCaption(text);
         SendMessage messageVpn = new SendMessage();
         SendMessage messageVpn1 = new SendMessage();
         SendMessage messageVpn2 = new SendMessage();
@@ -172,38 +156,23 @@ private final TelegramBotQRCode QR;
         keyboardMarkup.setResizeKeyboard(true);
         messageVpn2.setReplyMarkup(keyboardMarkup);
 
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred: " + e.getMessage());
-        }
-        try {
-            execute(messageVpn);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred: " + e.getMessage());
-        }
-        try {
-            execute(messageVpn1);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred: " + e.getMessage());
-        }
-        try {
-            execute(messageVpn2);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred: " + e.getMessage());
-        }
+        sendMessage(message);
+        sendMessage(messageVpn);
+        sendMessage(messageVpn1);
+        sendMessage(messageVpn2);
     }
 
 
     private void menu(Update update) {
         Long id = getId(update);
+        System.out.println(update.getCallbackQuery());
+        System.out.println(update.getMessage());
         SendMessage message = new SendMessage();
         message.setChatId(id);
         message.setParseMode("HTML");
         List<Long> day = getTime(id);
         if (!day.isEmpty()) {
-            message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ключ истекает через\n</b>"
-                    + day.get(0) + " дней " + day.get(1) + " часов " + day.get(2) + " минут ");
+            message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ключ истекает через\n</b>" + day.get(0) + " дней " + day.get(1) + " часов " + day.get(2) + " минут ");
 
             ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
             List<KeyboardRow> keyboardRows = new ArrayList<>();
@@ -214,14 +183,13 @@ private final TelegramBotQRCode QR;
             keyboardMarkup.setKeyboard(keyboardRows);
             message.setReplyMarkup(keyboardMarkup);
             keyboardMarkup.setResizeKeyboard(true);
-            message.setReplyMarkup(getMenuMarkup());
-            try {
-                execute(message);
-            } catch (TelegramApiException e) {
-                log.error("Error occurred: " + e.getMessage());
-            }
+            message.setReplyMarkup(keyBoardService.getMenuMarkup());
+            sendMessage(message);
+        } else {
+            message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ошибка</b>");
+            sendMessage(message);
         }
-        message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ошибка</b>");
+
 
     }
 
@@ -233,15 +201,10 @@ private final TelegramBotQRCode QR;
         message.setParseMode("HTML");
         List<Long> day = getTime(id);
         if (!day.isEmpty()) {
-            message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ключ истекает через\n</b>"
-                    + day.get(0) + " дней " + day.get(1) + " часов " + day.get(2) + " минут ");
+            message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ключ истекает через\n</b>" + day.get(0) + " дней " + day.get(1) + " часов " + day.get(2) + " минут ");
 
-            message.setReplyMarkup(getMenuMarkup());
-            try {
-                execute(message);
-            } catch (TelegramApiException e) {
-                log.error("Error occurred: " + e.getMessage());
-            }
+            message.setReplyMarkup(keyBoardService.getMenuMarkup());
+            sendMessage(message);
         }
         message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ошибка</b>");
 
@@ -255,17 +218,13 @@ private final TelegramBotQRCode QR;
         message.setMessageId(messId);
         message.setParseMode("HTML");
         List<Long> day = getTime(id);
-        message.setText("У тебя осталось <b>" + day.get(0) + " дней " + "доступа </b>\n\n"
-                + "<b>Продли дни доступа выгодно</b>\uD83D\uDC47");
+        message.setText("У тебя осталось <b>" + day.get(0) + " дней " + "доступа </b>\n\n" + "<b>Продли дни доступа выгодно</b>\uD83D\uDC47");
         System.out.println(message.getText());
-        message.setReplyMarkup(getBuyMarkup());
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred: " + e.getMessage());
-        }
+        message.setReplyMarkup(keyBoardService.getBuyMarkup());
+        sendMessage(message);
     }
-    private void key(Update update)  {
+
+    private void key(Update update) {
         if (update.getCallbackQuery() == null || update.getCallbackQuery().getMessage() == null) {
             log.error("CallbackQuery or Message is null in the update");
             return;
@@ -285,36 +244,19 @@ private final TelegramBotQRCode QR;
             message.setCaption("Не удалось получить информацию о сроке действия ключа.");
         } else {
 
-            message.setCaption("Ключ доступа <b>\n\n" +
-                    "Истекает через " + day.get(0) + " дней</b>.");
+            message.setCaption("Ключ доступа <b>\n\n" + "Истекает через " + day.get(0) + " дней</b>.");
         }
 
 
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred while sending message: " + e.getMessage());
-        }
+        sendMessage(message);
         SendMessage message1 = new SendMessage();
         message1.setChatId(id);
         message1.setText(getConfig(update));
-        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-        List<InlineKeyboardButton> but = new ArrayList<>();
-        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
-        InlineKeyboardButton button = new InlineKeyboardButton();
-        button.setText("Назад");
-        button.setCallbackData("MENU");
-        but.add(button);
-        buttons.add(but);
-        keyboardMarkup.setKeyboard(buttons);
-        message1.setReplyMarkup(keyboardMarkup);
+        message1.setReplyMarkup(keyBoardService.backKeyBoard());
 
-        try {
-            execute(message1);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred while sending message1: " + e.getMessage());
-        }
+        sendMessage(message1);
     }
+
     private void help(Update update) {
         // Проверяем наличие callbackQuery и сообщения
         if (update.getCallbackQuery() == null || update.getCallbackQuery().getMessage() == null) {
@@ -331,8 +273,7 @@ private final TelegramBotQRCode QR;
         message.setChatId(id);
         message.setMessageId(messId);
         message.setParseMode("HTML");
-        message.setText("Появились вопросы?\n\n" +
-                "Напиши прямо в чат ✏\uFE0F");
+        message.setText("Появились вопросы?\n\n" + "Напиши прямо в чат ✏\uFE0F");
 
         // Создаём клавиатуру
         InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
@@ -349,15 +290,10 @@ private final TelegramBotQRCode QR;
         keyboardMarkup.setKeyboard(buttons);
         message.setReplyMarkup(keyboardMarkup);
 
-        // Отправляем сообщение
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred while sending help message: " + e.getMessage());
-        }
+        sendMessage(message);
     }
 
-    public void setup(Update update){
+    public void setup(Update update) {
 
         if (update.getCallbackQuery() == null || update.getCallbackQuery().getMessage() == null) {
             log.error("CallbackQuery or Message is null in the update");
@@ -371,14 +307,9 @@ private final TelegramBotQRCode QR;
         message.setMessageId(messId);
         message.setParseMode("HTML");
         message.setText("На каком устройстве нужно настроить VPN?");
-        message.setReplyMarkup(getSetupMarkup());
+        message.setReplyMarkup(keyBoardService.getSetupMarkup());
 
-        // Отправляем сообщение
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred while sending help message: " + e.getMessage());
-        }
+        sendMessage(message);
     }
 
 
@@ -399,6 +330,43 @@ private final TelegramBotQRCode QR;
         }
 
     }
+
+    public void sendMessage(SendMessage textToSend) {
+        try {
+            execute(textToSend);
+        } catch (TelegramApiException e) {
+            log.error("Error occurred: " + e.getMessage());
+        }
+
+    }
+
+    public void sendMessage(EditMessageText textToSend) {
+        try {
+            execute(textToSend);
+        } catch (TelegramApiException e) {
+            log.error("Error occurred: " + e.getMessage());
+        }
+
+    }
+
+    public void sendMessage(SendPhoto textToSend) {
+        try {
+            execute(textToSend);
+        } catch (TelegramApiException e) {
+            log.error("Error occurred: " + e.getMessage());
+        }
+
+    }
+
+    public void sendMessage(SendSticker textToSend) {
+        try {
+            execute(textToSend);
+        } catch (TelegramApiException e) {
+            log.error("Error occurred: " + e.getMessage());
+        }
+
+    }
+
 
     private void deleteLastBotMessage(Long chatId, Integer messageId) {
         DeleteMessage deleteMessage = new DeleteMessage();
@@ -475,133 +443,11 @@ private final TelegramBotQRCode QR;
         }
         return null;
     }
-    public InlineKeyboardMarkup getSetupMarkup() {
-        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
-
-        // Добавление кнопки для iPhone/iPad
-        InlineKeyboardButton buttonIPhone = new InlineKeyboardButton();
-        buttonIPhone.setText("iPhone/iPad 🍏");
-        buttonIPhone.setCallbackData("IPHONE");
-        buttons.add(Collections.singletonList(buttonIPhone)); // Одна кнопка в строке
-
-        // Добавление кнопки для Android
-        InlineKeyboardButton buttonAndroid = new InlineKeyboardButton();
-        buttonAndroid.setText("Android 🤖");
-        buttonAndroid.setCallbackData("ANDROID");
-        buttons.add(Collections.singletonList(buttonAndroid)); // Одна кнопка в строке
-
-        // Добавление кнопки для Mac
-        InlineKeyboardButton buttonMac = new InlineKeyboardButton();
-        buttonMac.setText("Mac 🍎");
-        buttonMac.setCallbackData("MAC");
-        buttons.add(Collections.singletonList(buttonMac)); // Одна кнопка в строке
-
-        // Добавление кнопки для Windows
-        InlineKeyboardButton buttonWin = new InlineKeyboardButton();
-        buttonWin.setText("Windows 🪟");
-        buttonWin.setCallbackData("WIN");
-        buttons.add(Collections.singletonList(buttonWin)); // Одна кнопка в строке
-
-        // Добавление кнопки для телевизора
-        InlineKeyboardButton buttonTv = new InlineKeyboardButton();
-        buttonTv.setText("Телевизор 📺");
-        buttonTv.setCallbackData("TV");
-        buttons.add(Collections.singletonList(buttonTv)); // Одна кнопка в строке
-
-        // Добавление кнопки "Назад"
-        InlineKeyboardButton buttonBack = new InlineKeyboardButton();
-        buttonBack.setText("Назад");
-        buttonBack.setCallbackData("MENU");
-        buttons.add(Collections.singletonList(buttonBack)); // Одна кнопка в строке
-
-        // Установка кнопок в клавиатуру
-        keyboardMarkup.setKeyboard(buttons);
-        return keyboardMarkup;
-    }
 
 
-    public InlineKeyboardMarkup getMenuMarkup() {
-        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-        List<InlineKeyboardButton> but = new ArrayList<>();
-        List<InlineKeyboardButton> but2 = new ArrayList<>();
-        List<InlineKeyboardButton> but3 = new ArrayList<>();
-        List<InlineKeyboardButton> but4 = new ArrayList<>();
-        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
+    public SendPhoto sendQRCode(Long chatId, String qrText) {
 
-        InlineKeyboardButton buttonBuy = new InlineKeyboardButton();
-        buttonBuy.setText("\uD83D\uDCB8 Купить дни доступа");
-        buttonBuy.setCallbackData("BUY");
-        but.add(buttonBuy);
-
-        InlineKeyboardButton buttonSetup = new InlineKeyboardButton();
-        buttonSetup.setText("⚙\uFE0F Как настроить?");
-        buttonSetup.setCallbackData("SETUP");
-        but2.add(buttonSetup);
-        InlineKeyboardButton buttonHelp = new InlineKeyboardButton();
-        buttonHelp.setText("\uD83D\uDEA8 Помощь");
-        buttonHelp.setCallbackData("HELP");
-        but3.add(buttonHelp);
-        InlineKeyboardButton buttonKey = new InlineKeyboardButton();
-        buttonKey.setText("\uD83D\uDD11 Ключ");
-        buttonKey.setCallbackData("KEY");
-        but4.add(buttonKey);
-        buttons.add(but);
-        buttons.add(but4);
-        buttons.add(but2);
-        buttons.add(but3);
-
-        keyboardMarkup.setKeyboard(buttons);
-        return keyboardMarkup;
-    }
-
-    public InlineKeyboardMarkup getBuyMarkup() {
-        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-        List<InlineKeyboardButton> but = new ArrayList<>();
-        List<InlineKeyboardButton> but2 = new ArrayList<>();
-        List<InlineKeyboardButton> but3 = new ArrayList<>();
-        List<InlineKeyboardButton> but4 = new ArrayList<>();
-        List<InlineKeyboardButton> but5 = new ArrayList<>();
-        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
-
-        InlineKeyboardButton months = new InlineKeyboardButton();
-        months.setText("199 руб на месяц");
-        months.setCallbackData("MONTHS");
-        but.add(months);
-
-        InlineKeyboardButton threeMoths = new InlineKeyboardButton();
-        threeMoths.setText("499 руб на 3 месяца");
-        threeMoths.setCallbackData("THREEMONTHS");
-        but2.add(threeMoths);
-
-        InlineKeyboardButton sixMoths = new InlineKeyboardButton();
-        sixMoths.setText("799 руб на полгода");
-        sixMoths.setCallbackData("SIXMONTHS");
-        but3.add(sixMoths);
-
-        InlineKeyboardButton year = new InlineKeyboardButton();
-        year.setText("1499 руб на год");
-        year.setCallbackData("YEAR");
-        but4.add(year);
-
-        InlineKeyboardButton home = new InlineKeyboardButton();
-        home.setText("Выйти в главное меню");
-        home.setCallbackData("MENU");
-        but5.add(home);
-
-        buttons.add(but);
-        buttons.add(but2);
-        buttons.add(but3);
-        buttons.add(but4);
-        buttons.add(but5);
-
-        keyboardMarkup.setKeyboard(buttons);
-        return keyboardMarkup;
-    }
-
-    public SendPhoto sendQRCode(Long chatId, String qrText){
-
-            // Генерация QR-кода
+        // Генерация QR-кода
         ByteArrayInputStream qrCodeStream = null;
         try {
             qrCodeStream = QR.generateQRCodeStream(qrText, 300, 300);
@@ -612,49 +458,37 @@ private final TelegramBotQRCode QR;
         }
 
         // Подготовка сообщения с изображением
-            InputFile inputFile = new InputFile(qrCodeStream, "qr-code.png");
-            SendPhoto sendPhoto = new SendPhoto();
-            sendPhoto.setChatId(chatId);
-            sendPhoto.setPhoto(inputFile);
-            //sendPhoto.setCaption("Ваш QR-код:"); // Опционально, можно добавить подпись
+        InputFile inputFile = new InputFile(qrCodeStream, "qr-code.png");
+        SendPhoto sendPhoto = new SendPhoto();
+        sendPhoto.setChatId(chatId);
+        sendPhoto.setPhoto(inputFile);
+        //sendPhoto.setCaption("Ваш QR-код:"); // Опционально, можно добавить подпись
 
-            return sendPhoto;
+        return sendPhoto;
     }
 
-    private void Check(Update update, String period){
-        if (update.getCallbackQuery() == null || update.getCallbackQuery().getMessage() == null) {
+    private void Check(Update update, String period) {
+        if (update.getCallbackQuery() == null && update.getCallbackQuery().getMessage() == null) {
             log.error("CallbackQuery or Message is null in the update");
             return;
         }
 
         Long id = update.getCallbackQuery().getMessage().getChatId();
         int messId = update.getCallbackQuery().getMessage().getMessageId();
-        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
+
         EditMessageText message = new EditMessageText();
         message.setChatId(id);
         message.setMessageId(messId);
         message.setParseMode("HTML");
         message.setText("Нужен ли вам чек?");
-        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-        List<InlineKeyboardButton> but = new ArrayList<>();
-        List<InlineKeyboardButton> but2 = new ArrayList<>();
-        InlineKeyboardButton months = new InlineKeyboardButton();
-        months.setText("Да, нужен");
-        months.setCallbackData("TRUE");
-        but.add(months);
-        InlineKeyboardButton threeMoths = new InlineKeyboardButton();
-        threeMoths.setText("Нет");
-        threeMoths.setCallbackData("FALSE");
-        but.add(threeMoths);
-        InlineKeyboardButton home = new InlineKeyboardButton();
-        home.setText("Выйти в главное меню");
-        home.setCallbackData("MENU");
-        but2.add(home);
-        keyboardMarkup.setKeyboard(buttons);
-        message.setReplyMarkup(keyboardMarkup);
+
+        message.setReplyMarkup(keyBoardService.checkKeyBoard());
+
+        sendMessage(message);
 
     }
-    private String Payments(Update update, String period){
+
+    private String Payments(Update update, String period) {
         return null;
     }
 
@@ -678,13 +512,13 @@ private final TelegramBotQRCode QR;
             case "KEY":
                 key(update);
                 break;
-            case "MOTHS":
-                Payments(update, callbackData);
-                break;
-            case "THREEMOTHS":
+            case "MONTHS":
                 Check(update, callbackData);
                 break;
-            case "SIXMOTHS":
+            case "THREEMONTHS":
+                Check(update, callbackData);
+                break;
+            case "SIXMONTHS":
                 Check(update, callbackData);
                 break;
             case "YEAR":
