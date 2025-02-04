@@ -27,6 +27,9 @@ public class ApiOptions {
     @Value("${panel.addClient}")
     private String url;
 
+    @Value("${panel.session}")
+    String sessionId;
+
     private final TelegramUserRepository telegramUserRepository;
 
     private final ObjectMapper objectMapper;
@@ -79,9 +82,8 @@ public class ApiOptions {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
 
-        // Добавление куки с session
-        String sessionId = "3x-ui=MTczNTk2MTY0NXxEWDhFQVFMX2dBQUJFQUVRQUFCMV80QUFBUVp6ZEhKcGJtY01EQUFLVEU5SFNVNWZWVk5GVWhoNExYVnBMMlJoZEdGaVlYTmxMMjF2WkdWc0xsVnpaWExfZ1FNQkFRUlZjMlZ5QWYtQ0FBRUVBUUpKWkFFRUFBRUlWWE5sY201aGJXVUJEQUFCQ0ZCaGMzTjNiM0prQVF3QUFRdE1iMmRwYmxObFkzSmxkQUVNQUFBQUh2LUNHd0VDQVFwRFIwdFVWbTFrVTNOdUFRbzRaM1ZXUTJVNU9YTnFBQT09fNtxU4yDc6HsMB9s7o15nCkHM4e9qjItPCO7HWHk54jI"; // Подставьте сюда свой session ID
-        headers.add("Cookie", sessionId);
+
+         headers.add("Cookie", sessionId);
 
 
         // Создание объекта запроса
@@ -107,7 +109,6 @@ public class ApiOptions {
     public Long getTimeToLeft(Long id) {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
-        String sessionId = "3x-ui=MTczNTk2MTY0NXxEWDhFQVFMX2dBQUJFQUVRQUFCMV80QUFBUVp6ZEhKcGJtY01EQUFLVEU5SFNVNWZWVk5GVWhoNExYVnBMMlJoZEdGaVlYTmxMMjF2WkdWc0xsVnpaWExfZ1FNQkFRUlZjMlZ5QWYtQ0FBRUVBUUpKWkFFRUFBRUlWWE5sY201aGJXVUJEQUFCQ0ZCaGMzTjNiM0prQVF3QUFRdE1iMmRwYmxObFkzSmxkQUVNQUFBQUh2LUNHd0VDQVFwRFIwdFVWbTFrVTNOdUFRbzRaM1ZXUTJVNU9YTnFBQT09fNtxU4yDc6HsMB9s7o15nCkHM4e9qjItPCO7HWHk54jI"; // Подставьте сюда свой session ID
         headers.add("Cookie", sessionId);
         String urlId = "https://develop-m004ka.ru:7333/lQ4Sfx2VaytIW0c/panel/api/inbounds/getClientTrafficsById/" + id;
         HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
