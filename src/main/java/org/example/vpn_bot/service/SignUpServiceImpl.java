@@ -1,4 +1,4 @@
-package org.example.vpn_bot.service.Impl;
+package org.example.vpn_bot.service;
 
 
 import lombok.RequiredArgsConstructor;
