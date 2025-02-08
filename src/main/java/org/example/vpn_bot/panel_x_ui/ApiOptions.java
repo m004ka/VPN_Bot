@@ -140,8 +140,10 @@ public class ApiOptions {
                         Long expiryTime = firstObject.get("expiryTime").asLong();
 
                         // Выводим значение expiryTime
+                        System.out.println("Ошибка при отправке запроса. experyTime Статус: " + expiryTime);
                         return expiryTime;
                     } else {
+                        System.out.println("Ошибка при отправке запроса. Пусто Статус: " + response.getStatusCode());
                         log.error("Массив obj пуст.");
                     }
                 } catch (Exception e) {
