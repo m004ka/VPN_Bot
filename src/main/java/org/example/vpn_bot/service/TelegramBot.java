@@ -5,6 +5,8 @@ import com.google.zxing.WriterException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.vpn_bot.Enum.Period;
+//import org.example.vpn_bot.YooKassa.TransactionService;
 import org.example.vpn_bot.config.BotConfig;
 import org.example.vpn_bot.models.TelegramUser;
 import org.example.vpn_bot.panel_x_ui.ApiOptions;
@@ -14,11 +16,13 @@ import org.example.vpn_bot.service.keyboard.KeyBoardService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.send.SendSticker;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -43,6 +47,8 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final SignUpServiceImpl signUpService;
     private final ApiOptions apiOptions;
     private final KeyBoardService keyBoardService;
+    private final TimeService timeService;
+    //private final TransactionService payService;
     //    private final TelegramBotMenu telegramBotMenu;
     @Value("${vpn.protocol}")
     private String protocol;
@@ -125,6 +131,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         return protocol + user.getChatId() + connect + user.getUsername();
     }
 
+    public String copyEnabled(String text) {
+        return "`" + text + "`";
+    }
+
     private void getTestVPN(Update update) {
         apiOptions.addClientToInbound(update);
         Long id = update.getCallbackQuery().getMessage().getChatId();
@@ -165,14 +175,18 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void menu(Update update) {
         Long id = getId(update);
-        System.out.println(update.getCallbackQuery());
-        System.out.println(update.getMessage());
         SendMessage message = new SendMessage();
         message.setChatId(id);
         message.setParseMode("HTML");
-        List<Long> day = getTime(id);
+
+        List<Long> day = timeService.checkTimeAndExecute(id);
+
         if (!day.isEmpty()) {
-            message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ключ истекает через\n</b>" + day.get(0) + " дней " + day.get(1) + " часов " + day.get(2) + " минут ");
+            message.setText("<b>Аккаунт ID </b>" + id +
+                    "\n\n<b>Ключ истекает через\n</b>" +
+                    day.get(0) + " дней " +
+                    day.get(1) + " часов " +
+                    day.get(2) + " минут ");
 
             ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
             List<KeyboardRow> keyboardRows = new ArrayList<>();
@@ -181,17 +195,15 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             keyboardRows.add(row);
             keyboardMarkup.setKeyboard(keyboardRows);
-            message.setReplyMarkup(keyboardMarkup);
             keyboardMarkup.setResizeKeyboard(true);
             message.setReplyMarkup(keyBoardService.getMenuMarkup());
-            sendMessage(message);
         } else {
             message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ошибка</b>");
-            sendMessage(message);
         }
 
-
+        sendMessage(message);
     }
+
 
     private void menuQuery(Update update) {
         Long id = getId(update);
@@ -199,7 +211,45 @@ public class TelegramBot extends TelegramLongPollingBot {
         message.setChatId(id);
         message.setMessageId(update.getCallbackQuery().getMessage().getMessageId());
         message.setParseMode("HTML");
-        List<Long> day = getTime(id);
+        if (update.hasCallbackQuery()) {
+            System.out.println("Обрабатываем callback-запрос");
+            CallbackQuery callbackQuery = update.getCallbackQuery();
+            String callbackData = callbackQuery.getData();
+
+            if ("MENU_UPDATE".equals(callbackData)) {
+                AnswerCallbackQuery answer = new AnswerCallbackQuery();
+                answer.setCallbackQueryId(callbackQuery.getId());
+                answer.setText("Svetlyachok_VPN - 👌");
+                answer.setShowAlert(false); // true - всплывающее окно, false - уведомление на пару секунд
+
+                try {
+                    execute(answer);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+            }
+        }
+        List<Long> day = timeService.checkTimeAndExecute(id);
+        if (!day.isEmpty()) {
+            message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ключ истекает через\n</b>" + day.get(0) + " дней " + day.get(1) + " часов " + day.get(2) + " минут ");
+
+            message.setReplyMarkup(keyBoardService.getMenuMarkup());
+            sendMessage(message);
+        }
+        message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ошибка</b>");
+
+    }
+
+    private void menuQueryDelete(Update update) {
+        Long id = getId(update);
+        int messId = update.getCallbackQuery().getMessage().getMessageId();
+        deleteLastBotMessage(id, messId);
+        SendMessage message = new SendMessage();
+        message.setChatId(id);
+
+        message.setParseMode("HTML");
+        List<Long> day = timeService.checkTimeAndExecute(id);
         if (!day.isEmpty()) {
             message.setText("<b>Аккаунт ID </b>" + id + "\n\n<b>Ключ истекает через\n</b>" + day.get(0) + " дней " + day.get(1) + " часов " + day.get(2) + " минут ");
 
@@ -217,7 +267,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         message.setChatId(id);
         message.setMessageId(messId);
         message.setParseMode("HTML");
-        List<Long> day = getTime(id);
+        List<Long> day = timeService.checkTimeAndExecute(id);
         message.setText("У тебя осталось <b>" + day.get(0) + " дней " + "доступа </b>\n\n" + "<b>Продли дни доступа выгодно</b>\uD83D\uDC47");
         System.out.println(message.getText());
         message.setReplyMarkup(keyBoardService.getBuyMarkup());
@@ -235,27 +285,37 @@ public class TelegramBot extends TelegramLongPollingBot {
         deleteLastBotMessage(id, messId);
         SendPhoto message = sendQRCode(id, getConfig(update));
         message.setChatId(id);
-        message.setParseMode("HTML");
 
-
-        List<Long> day = getTime(id);
-        if (day == null || day.isEmpty()) {
+        List<Long> day = timeService.checkTimeAndExecute(id);
+        if (day.get(0) == 0) {
             log.error("getTime(id) вернул null или пустой список.");
-            message.setCaption("Не удалось получить информацию о сроке действия ключа.");
+            message.setCaption("Срок действия ключа истек. \nДля его активации вам необходимо продлить подписку");
         } else {
-
-            message.setCaption("Ключ доступа <b>\n\n" + "Истекает через " + day.get(0) + " дней</b>.");
+            // Убедитесь, что текст, который должен быть жирным, обернут в **
+            message.setCaption("*Ключ доступа* \n\n" + "*Истекает через* *" + day.get(0) + "* *дней*.\n\n" + copyEnabled(getConfig(update)));
         }
 
+        message.setParseMode("Markdown"); // Устанавливаем Markdown как режим парсинга
+
+        message.setReplyMarkup(keyBoardService.backKeyBoardDeleteMess());
 
         sendMessage(message);
-        SendMessage message1 = new SendMessage();
-        message1.setChatId(id);
-        message1.setText(getConfig(update));
-        message1.setReplyMarkup(keyBoardService.backKeyBoard());
-
-        sendMessage(message1);
     }
+
+    private void settings(Update update, String text) {
+        EditMessageText message = new EditMessageText();
+        Long id = update.getCallbackQuery().getMessage().getChatId();
+        int messId = update.getCallbackQuery().getMessage().getMessageId();
+        message.setChatId(id);
+        message.setMessageId(messId);
+        message.setParseMode("HTML");
+        List<Long> day = timeService.checkTimeAndExecute(id);
+        message.setText("У тебя осталось <b>" + day.get(0) + " дней " + "доступа </b>\n\n" + "<b>Продли дни доступа выгодно</b>\uD83D\uDC47");
+        System.out.println(message.getText());
+        message.setReplyMarkup(keyBoardService.getBuyMarkup());
+        sendMessage(message);
+    }
+
 
     private void help(Update update) {
         // Проверяем наличие callbackQuery и сообщения
@@ -289,6 +349,27 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         keyboardMarkup.setKeyboard(buttons);
         message.setReplyMarkup(keyboardMarkup);
+
+        sendMessage(message);
+    }
+
+    public void download(Update update) {
+
+        if (update.getCallbackQuery() == null || update.getCallbackQuery().getMessage() == null) {
+            log.error("CallbackQuery or Message is null in the update");
+            return;
+        }
+        Long id = update.getCallbackQuery().getMessage().getChatId();
+        int messId = update.getCallbackQuery().getMessage().getMessageId();
+
+        EditMessageText message = new EditMessageText();
+        message.setChatId(id);
+        message.setMessageId(messId);
+        message.setParseMode("MARKDOWN");
+        message.setText("\uD83C\uDF89 *СКАЧАТЬ ПРИЛОЖЕНИЕ*\n" +
+                "\n" +
+                "Выберите Вашу операционную систему и скачайте соответствующее приложение ⬇\uFE0F");
+        message.setReplyMarkup(keyBoardService.getDownloadKeyboard());
 
         sendMessage(message);
     }
@@ -334,11 +415,15 @@ public class TelegramBot extends TelegramLongPollingBot {
     public void sendMessage(SendMessage textToSend) {
         try {
             execute(textToSend);
+            System.out.println("не Ошибка");
         } catch (TelegramApiException e) {
             log.error("Error occurred: " + e.getMessage());
+            System.out.println("Ошибка");
         }
 
     }
+
+
 
     public void sendMessage(EditMessageText textToSend) {
         try {
@@ -417,33 +502,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         return userTg;
     }
 
-    public List<Long> getTime(Long id) {
-        long lastTime = apiOptions.getTimeToLeft(id);
-        long currentTime = Instant.now().toEpochMilli();
-        long diff = lastTime - currentTime;
-        if (diff > 0) {
-            // Переводим разницу в секунды
-            long seconds = diff / 1000;
-
-            // Вычисляем дни, часы, минуты и секунды
-            long days = seconds / (24 * 60 * 60);
-            seconds %= (24 * 60 * 60); // Остаток секунд после дней
-
-            long hours = seconds / (60 * 60);
-            seconds %= (60 * 60); // Остаток секунд после часов
-
-            long minutes = seconds / 60;
-            seconds %= 60; // Остаток секунд после минут
-            List<Long> arr = new ArrayList<>();
-            arr.add(days);
-            arr.add(hours);
-            arr.add(minutes);
-            arr.add(seconds);
-            return arr;
-        }
-        return null;
-    }
-
 
     public SendPhoto sendQRCode(Long chatId, String qrText) {
 
@@ -467,7 +525,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         return sendPhoto;
     }
 
-    private void Check(Update update, String period) {
+    private void Check(Update update, Period period) {
         if (update.getCallbackQuery() == null && update.getCallbackQuery().getMessage() == null) {
             log.error("CallbackQuery or Message is null in the update");
             return;
@@ -482,7 +540,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         message.setParseMode("HTML");
         message.setText("Нужен ли вам чек?");
 
-        message.setReplyMarkup(keyBoardService.checkKeyBoard());
+        message.setReplyMarkup(keyBoardService.checkKeyBoard(period));
 
         sendMessage(message);
 
@@ -513,16 +571,16 @@ public class TelegramBot extends TelegramLongPollingBot {
                 key(update);
                 break;
             case "MONTHS":
-                Check(update, callbackData);
+                Check(update, Period.MONTH);
                 break;
             case "THREEMONTHS":
-                Check(update, callbackData);
+                Check(update, Period.THREE_MONTH);
                 break;
             case "SIXMONTHS":
-                Check(update, callbackData);
+                Check(update, Period.SIX_MONTH);
                 break;
             case "YEAR":
-                Check(update, callbackData);
+                Check(update, Period.YEAR);
                 break;
             case "IPHONE":
                 break;
@@ -537,6 +595,29 @@ public class TelegramBot extends TelegramLongPollingBot {
             case "MENU":
                 menuQuery(update);
                 break;
+            case "DOWNLOAD":
+                download(update);
+                break;
+            case "MENU_UPDATE":
+                menuQuery(update);
+                break;
+            case "MENU_delete":
+                menuQueryDelete(update);
+                break;
+            case "TRUE_1":
+                //sendMessage(payService.getUrlPay(update, Period.MONTH));
+                break;
+            case "TRUE_3":
+                //sendMessage(payService.getUrlPay(update, Period.THREE_MONTH));
+                break;
+            case "TRUE_6":
+
+                //sendMessage(payService.getUrlPay(update, Period.SIX_MONTH));
+                break;
+            case "TRUE_12":
+                //sendMessage(payService.getUrlPay(update, Period.YEAR));
+                break;
+
 
             default:
                 sendMessage(update.getCallbackQuery().getMessage().getChatId(), "Здравствуйте \uD83D\uDE4F\n" + "Ознакомьтесь с нашим Главным меню, тут вы найдете ответ на ваш вопрос \uD83E\uDEF6\uD83C\uDFFC");
