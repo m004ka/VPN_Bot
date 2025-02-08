@@ -33,6 +33,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>ru.loolzaaa</groupId>
+            <artifactId>youkassa-sdk-java</artifactId>
+            <version>0.0.2</version>
+        </dependency>
+        <dependency>
             <groupId>com.google.zxing</groupId>
             <artifactId>core</artifactId>
             <version>3.5.1</version>
