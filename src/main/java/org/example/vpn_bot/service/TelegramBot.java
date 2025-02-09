@@ -5,14 +5,20 @@ import com.google.zxing.WriterException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.vpn_bot.Enum.Period;
+
 //import org.example.vpn_bot.YooKassa.TransactionService;
+import org.example.vpn_bot.Enum.Period;
+import org.example.vpn_bot.Enum.Settings;
 import org.example.vpn_bot.config.BotConfig;
 import org.example.vpn_bot.models.TelegramUser;
 import org.example.vpn_bot.panel_x_ui.ApiOptions;
 import org.example.vpn_bot.repositories.TelegramUserRepository;
-import org.example.vpn_bot.service.keyboard.KeyBoardService;
+import org.example.vpn_bot.service.telegram.TelegramBotQRCode;
+import org.example.vpn_bot.service.telegram.keyboard.KeyBoardService;
 
+import org.example.vpn_bot.service.telegram.SignUpServiceImpl;
+
+import org.example.vpn_bot.service.telegram.TimeService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -33,7 +39,6 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,6 +49,8 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final TelegramBotQRCode QR;
     private final TelegramUserRepository tgUserRepo;
+
+
     private final SignUpServiceImpl signUpService;
     private final ApiOptions apiOptions;
     private final KeyBoardService keyBoardService;
@@ -308,11 +315,11 @@ public class TelegramBot extends TelegramLongPollingBot {
         int messId = update.getCallbackQuery().getMessage().getMessageId();
         message.setChatId(id);
         message.setMessageId(messId);
-        message.setParseMode("HTML");
-        List<Long> day = timeService.checkTimeAndExecute(id);
-        message.setText("У тебя осталось <b>" + day.get(0) + " дней " + "доступа </b>\n\n" + "<b>Продли дни доступа выгодно</b>\uD83D\uDC47");
-        System.out.println(message.getText());
-        message.setReplyMarkup(keyBoardService.getBuyMarkup());
+        message.setParseMode("MARKDOWN");
+
+        message.setText(text);
+
+        message.setReplyMarkup(keyBoardService.backKeyBoard());
         sendMessage(message);
     }
 
@@ -583,14 +590,19 @@ public class TelegramBot extends TelegramLongPollingBot {
                 Check(update, Period.YEAR);
                 break;
             case "IPHONE":
+                settings(update, Settings.IPHONE.getText());
                 break;
             case "ANDROID":
+                settings(update, Settings.ANDROID.getText());
                 break;
             case "MAC":
+                settings(update, Settings.MAC.getText());
                 break;
             case "WIN":
+                settings(update, Settings.WINDOWS.getText());
                 break;
             case "TV":
+                settings(update, Settings.TV.getText());
                 break;
             case "MENU":
                 menuQuery(update);
