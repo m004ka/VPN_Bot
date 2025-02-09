@@ -1,4 +1,4 @@
-package org.example.vpn_bot.service.keyboard;
+package org.example.vpn_bot.service.telegram.keyboard;
 
 import lombok.RequiredArgsConstructor;
 import org.example.vpn_bot.Enum.Period;
