@@ -14,5 +14,4 @@ public enum Period {
     Period(int months){
         this.months = months;
     }
-
 }
