@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 //import org.example.vpn_bot.YooKassa.TransactionService;
 import org.example.vpn_bot.Enum.Period;
 import org.example.vpn_bot.Enum.Settings;
+import org.example.vpn_bot.YooKassa.PaymentService;
 import org.example.vpn_bot.config.BotConfig;
 import org.example.vpn_bot.models.TelegramUser;
 import org.example.vpn_bot.panel_x_ui.ApiOptions;
@@ -53,6 +54,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final SignUpServiceImpl signUpService;
     private final ApiOptions apiOptions;
+    private final PaymentService paymentService;
     private final KeyBoardService keyBoardService;
     private final TimeService timeService;
     //private final TransactionService payService;
@@ -227,7 +229,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 AnswerCallbackQuery answer = new AnswerCallbackQuery();
                 answer.setCallbackQueryId(callbackQuery.getId());
                 answer.setText("Svetlyachok_VPN - 👌");
-                answer.setShowAlert(false); // true - всплывающее окно, false - уведомление на пару секунд
+                answer.setShowAlert(false);
 
                 try {
                     execute(answer);
@@ -298,11 +300,11 @@ public class TelegramBot extends TelegramLongPollingBot {
             log.error("getTime(id) вернул null или пустой список.");
             message.setCaption("Срок действия ключа истек. \nДля его активации вам необходимо продлить подписку");
         } else {
-            // Убедитесь, что текст, который должен быть жирным, обернут в **
+
             message.setCaption("*Ключ доступа* \n\n" + "*Истекает через* *" + day.get(0) + "* *дней*.\n\n" + copyEnabled(getConfig(update)));
         }
 
-        message.setParseMode("Markdown"); // Устанавливаем Markdown как режим парсинга
+        message.setParseMode("Markdown");
 
         message.setReplyMarkup(keyBoardService.backKeyBoardDeleteMess());
 
@@ -552,6 +554,31 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendMessage(message);
 
     }
+    public void getMail(Update update, Period period){
+        EditMessageText message = new EditMessageText();
+        Long id = getId(update);
+        int messId = update.getCallbackQuery().getMessage().getMessageId();
+        message.setMessageId(messId);
+        message.setChatId(id);
+        message.setParseMode("HTML");
+        message.setText("Введите ваш email");
+        message.setReplyMarkup(keyBoardService.backKeyBoard());
+        sendMessage(message);
+    }
+
+    public void getUrl(Update update, Period period, boolean check, String email){
+        EditMessageText message = new EditMessageText();
+        Long id = getId(update);
+        int messId = update.getCallbackQuery().getMessage().getMessageId();
+        message.setMessageId(messId);
+        String url = paymentService.getUrlPayment(update, period, check, email);
+        message.setChatId(id);
+        message.setParseMode("HTML");
+        message.setText("Ваша ссылка на оплату\n" + url);
+        message.setReplyMarkup(keyBoardService.backKeyBoard());
+        sendMessage(message);
+    }
+
 
     private String Payments(Update update, String period) {
         return null;
@@ -617,17 +644,29 @@ public class TelegramBot extends TelegramLongPollingBot {
                 menuQueryDelete(update);
                 break;
             case "TRUE_1":
-                //sendMessage(payService.getUrlPay(update, Period.MONTH));
+                getMail(update, Period.MONTH);
                 break;
             case "TRUE_3":
-                //sendMessage(payService.getUrlPay(update, Period.THREE_MONTH));
+                getMail(update, Period.THREE_MONTH);
                 break;
             case "TRUE_6":
 
-                //sendMessage(payService.getUrlPay(update, Period.SIX_MONTH));
+                getMail(update, Period.SIX_MONTH);
                 break;
             case "TRUE_12":
-                //sendMessage(payService.getUrlPay(update, Period.YEAR));
+                getMail(update, Period.YEAR);
+                break;
+            case "FALSE_1":
+                getUrl(update, Period.MONTH, false, "");
+                break;
+            case "FALSE_3":
+                getUrl(update, Period.THREE_MONTH, false, "");
+                break;
+            case "FALSE_6":
+                getUrl(update, Period.SIX_MONTH, false, "");
+                break;
+            case "FALSE_12":
+                getUrl(update, Period.YEAR, false, "");
                 break;
 
 
